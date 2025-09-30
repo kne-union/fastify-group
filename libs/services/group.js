@@ -13,7 +13,7 @@ module.exports = fp(async (fastify, options) => {
     if (data.parentId && !(await detail({ id: data.parentId }))) {
       throw new Error('未找到父标签');
     }
-    await models.tag.create(data);
+    return await models.tag.create(data);
   };
 
   const remove = async ({ id, type, code }) => {
@@ -50,7 +50,7 @@ module.exports = fp(async (fastify, options) => {
     return buildTree(null);
   };
 
-  const list = async ({ type, parentId, filter }) => {
+  const list = async ({ type, parentId, filter = {}, perPage, currentPage }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
@@ -63,6 +63,16 @@ module.exports = fp(async (fastify, options) => {
       }
     });
 
+    if (filter['keyword']) {
+      whereQuery[Op.or] = ['name', 'description'].map(name => {
+        return {
+          [name]: {
+            [Op.like]: `%${filter['keyword']}%`
+          }
+        };
+      });
+    }
+
     if (parentId) {
       whereQuery.parentId = parentId;
     }
@@ -72,11 +82,19 @@ module.exports = fp(async (fastify, options) => {
       };
     }
 
-    return await models.tag.findAll({
+    const { count, rows } = await models.tag.findAndCountAll({
       where: Object.assign({}, whereQuery, {
         type
-      })
+      }),
+      offset: perPage * (currentPage - 1),
+      limit: perPage,
+      order: [['createdAt', 'DESC']]
     });
+
+    return {
+      pageData: rows,
+      totalCount: count
+    };
   };
 
   const detail = async ({ id, code, type, parentId }) => {
@@ -97,7 +115,9 @@ module.exports = fp(async (fastify, options) => {
                 parentId
               }
             : {
-                [Op.is]: null
+                parentId: {
+                  [Op.is]: null
+                }
               }
         )
       });

@@ -9,10 +9,20 @@ module.exports = fp(async (fastify, options) => {
       schema: {
         summary: '获取列表',
         query: {
-          type: {
-            type: 'object',
-            properties: {
-              type: { type: 'string', description: '标签类型' }
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: '标签类型' },
+            filter: {
+              type: 'object',
+              default: {}
+            },
+            perPage: {
+              type: 'number',
+              default: 20
+            },
+            currentPage: {
+              type: 'number',
+              default: 1
             }
           }
         }
@@ -30,18 +40,16 @@ module.exports = fp(async (fastify, options) => {
       schema: {
         summary: '获取type的所有数据（树形或列表）',
         query: {
-          type: {
-            type: 'object',
-            properties: {
-              type: { type: 'string', description: '标签类型' },
-              output: { type: 'string', description: '是否输出为树型结构', enum: ['tree', 'list'] }
-            }
+          type: 'object',
+          properties: {
+            type: { type: 'string', description: '标签类型' },
+            output: { type: 'string', description: '是否输出为树型结构', enum: ['tree', 'list'] }
           }
         }
       }
     },
     async request => {
-      return services.list(request.query);
+      return services.groupList(request.query);
     }
   );
 
@@ -115,7 +123,8 @@ module.exports = fp(async (fastify, options) => {
       }
     },
     async request => {
-      return services.remove(request.body);
+      await services.remove(request.body);
+      return {};
     }
   );
 });
