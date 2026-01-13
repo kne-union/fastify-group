@@ -5,7 +5,9 @@ module.exports = fp(async (fastify, options) => {
   const { Op } = fastify.sequelize.Sequelize;
 
   const save = async ({ id, ...data }) => {
-    const tag = await detail({ id, code: data.code, type: data.type, parentId: data.parentId });
+    const tag = await detail({
+      id, code: data.code, type: data.type, language: data.language, parentId: data.parentId
+    });
     if (tag) {
       await tag.update(data);
       return tag;
@@ -13,24 +15,24 @@ module.exports = fp(async (fastify, options) => {
     if (data.parentId && !(await detail({ id: data.parentId }))) {
       throw new Error('未找到父标签');
     }
-    return await models.tag.create(data);
+    return models.tag.create(data);
   };
 
-  const remove = async ({ id, type, code }) => {
-    const tag = await detail({ id, type, code });
+  const remove = async ({ id, type, code, language }) => {
+    const tag = await detail({ id, type, code, language });
     if (!tag) {
       throw new Error('标签不存在');
     }
     await tag.destroy();
   };
 
-  const groupList = async ({ type, output = 'tree' }) => {
+  const groupList = async ({ type, language, output = 'tree' }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
     const tags = await models.tag.findAll({
       where: {
-        type
+        type, language
       }
     });
     if (output !== 'tree') {
@@ -63,6 +65,10 @@ module.exports = fp(async (fastify, options) => {
       }
     });
 
+    if (filter['language']) {
+      whereQuery.language = filter['language'];
+    }
+
     if (filter['keyword']) {
       whereQuery[Op.or] = ['name', 'description'].map(name => {
         return {
@@ -85,41 +91,30 @@ module.exports = fp(async (fastify, options) => {
     const { count, rows } = await models.tag.findAndCountAll({
       where: Object.assign({}, whereQuery, {
         type
-      }),
-      offset: perPage * (currentPage - 1),
-      limit: perPage,
-      order: [['createdAt', 'DESC']]
+      }), offset: perPage * (currentPage - 1), limit: perPage, order: [['createdAt', 'DESC']]
     });
 
     return {
-      pageData: rows,
-      totalCount: count
+      pageData: rows, totalCount: count
     };
   };
 
-  const detail = async ({ id, code, type, parentId }) => {
+  const detail = async ({ id, code, type, language, parentId }) => {
     let tag;
     if (id) {
       tag = await models.tag.findByPk(id);
     }
-    if (code && type) {
+    if (code && type && language) {
       tag = await models.tag.findOne({
-        where: Object.assign(
-          {},
-          {
-            code,
-            type
-          },
+        where: Object.assign({}, {
+          code, type, language
+        }, parentId ? {
           parentId
-            ? {
-                parentId
-              }
-            : {
-                parentId: {
-                  [Op.is]: null
-                }
-              }
-        )
+        } : {
+          parentId: {
+            [Op.is]: null
+          }
+        })
       });
     }
     if (!tag) {
@@ -130,9 +125,6 @@ module.exports = fp(async (fastify, options) => {
   };
 
   Object.assign(fastify[options.name].services, {
-    save,
-    remove,
-    groupList,
-    list
+    save, remove, groupList, list
   });
 });
