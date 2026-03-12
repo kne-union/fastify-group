@@ -57,6 +57,7 @@ module.exports = fp(async (fastify, options) => {
       throw new Error('必须传入类型');
     }
     const whereQuery = {};
+
     ['code', 'name'].forEach(name => {
       if (filter[name]) {
         whereQuery[name] = {
@@ -85,6 +86,22 @@ module.exports = fp(async (fastify, options) => {
     if (parentId === null) {
       whereQuery.parentId = {
         [Op.is]: null
+      };
+    }
+
+    if (filter['codes']) {
+      whereQuery.code = {
+        [Op.in]: filter['codes']
+      };
+
+      const rows = await models.tag.findAll({
+        where: Object.assign({}, whereQuery, {
+          type
+        }), order: [['createdAt', 'DESC']]
+      });
+
+      return {
+        pageData: rows, totalCount: rows.length
       };
     }
 
