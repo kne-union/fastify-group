@@ -30,22 +30,28 @@ module.exports = fp(async (fastify, options) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
+    const whereQuery = {};
+
+    if (language) {
+      whereQuery.language = language;
+    }
+
     const tags = await models.tag.findAll({
-      where: {
-        type, language
-      }
+      where: Object.assign({}, whereQuery, { type })
     });
     if (output !== 'tree') {
       return tags;
     }
+    // 转为普通对象数组，确保属性访问正确
+    const tagsData = tags.map(tag => tag.get({ plain: true }));
     const buildTree = parentId => {
-      const list = tags.filter(item => item.parentId === parentId);
-      if (list && list.length > 0) {
-        list.forEach(async (tag, index) => {
-          tags.split(index, 1);
-          tag.children = buildTree(tag.id);
-        });
-      }
+      const list = tagsData.filter(item => item.parentId === parentId);
+      list.forEach(item => {
+        const children = buildTree(item.id);
+        if (children.length > 0) {
+          item.children = children;
+        }
+      });
       return list;
     };
 
@@ -57,7 +63,6 @@ module.exports = fp(async (fastify, options) => {
       throw new Error('必须传入类型');
     }
     const whereQuery = {};
-
     ['code', 'name'].forEach(name => {
       if (filter[name]) {
         whereQuery[name] = {
@@ -89,22 +94,6 @@ module.exports = fp(async (fastify, options) => {
       };
     }
 
-    if (filter['codes']) {
-      whereQuery.code = {
-        [Op.in]: filter['codes']
-      };
-
-      const rows = await models.tag.findAll({
-        where: Object.assign({}, whereQuery, {
-          type
-        }), order: [['createdAt', 'DESC']]
-      });
-
-      return {
-        pageData: rows, totalCount: rows.length
-      };
-    }
-
     const { count, rows } = await models.tag.findAndCountAll({
       where: Object.assign({}, whereQuery, {
         type
@@ -114,6 +103,35 @@ module.exports = fp(async (fastify, options) => {
     return {
       pageData: rows, totalCount: count
     };
+  };
+
+  // 获取某个节点及其所有后代节点的 id 列表
+  const getDescendantIds = async ({ id, type, language }) => {
+    if (!type) {
+      throw new Error('必须传入类型');
+    }
+    const whereQuery = { type };
+    if (language) {
+      whereQuery.language = language;
+    }
+    const tags = await models.tag.findAll({ where: whereQuery });
+    const tagsData = tags.map(tag => tag.get({ plain: true }));
+
+    const findDescendants = (parentId) => {
+      const children = tagsData.filter(item => item.parentId === parentId);
+      let ids = [];
+      children.forEach(child => {
+        ids.push(child.id);
+        ids = ids.concat(findDescendants(child.id));
+      });
+      return ids;
+    };
+
+    if (id) {
+      return [id, ...findDescendants(id)];
+    }
+    // 如果没有传入 id，返回所有节点的 id
+    return tagsData.map(item => item.id);
   };
 
   const detail = async ({ id, code, type, language, parentId }) => {
@@ -142,6 +160,6 @@ module.exports = fp(async (fastify, options) => {
   };
 
   Object.assign(fastify[options.name].services, {
-    save, remove, groupList, list
+    save, remove, groupList, list, getDescendantIds
   });
 });

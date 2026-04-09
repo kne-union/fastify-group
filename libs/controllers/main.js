@@ -67,7 +67,7 @@ module.exports = fp(async (fastify, options) => {
           language: {
             type: 'string'
           }
-        }, required: ['type', 'code', 'name', 'language']
+        }, required: ['type', 'code', 'name']
       }
     }
   }, async request => {
