@@ -84,6 +84,11 @@ module.exports = fp(async (fastify, options) => {
         };
       });
     }
+    if (Array.isArray(filter['codes']) && filter['codes'].length > 0) {
+      whereQuery.code = {
+        [Op.in]: filter['codes']
+      };
+    }
 
     if (parentId) {
       whereQuery.parentId = parentId;
