@@ -76,7 +76,7 @@ module.exports = fp(async (fastify, options) => {
     }
 
     if (filter['keyword']) {
-      whereQuery[Op.or] = ['name', 'description'].map(name => {
+      whereQuery[Op.or] = ['code', 'name', 'description'].map(name => {
         return {
           [name]: {
             [Op.like]: `%${filter['keyword']}%`
