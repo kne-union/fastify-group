@@ -58,6 +58,8 @@ module.exports = fp(async (fastify, options) => {
     return buildTree(null);
   };
 
+  const { fn, col, where: sequelizeWhere } = fastify.sequelize.Sequelize;
+
   const list = async ({ type, parentId, filter = {}, perPage, currentPage }) => {
     if (!type) {
       throw new Error('必须传入类型');
@@ -65,9 +67,9 @@ module.exports = fp(async (fastify, options) => {
     const whereQuery = {};
     ['code', 'name'].forEach(name => {
       if (filter[name]) {
-        whereQuery[name] = {
-          [Op.like]: `%${filter[name]}%`
-        };
+        whereQuery[name] = sequelizeWhere(fn('LOWER', col(name)), {
+          [Op.like]: `%${filter[name].toLowerCase()}%`
+        });
       }
     });
 
@@ -76,12 +78,11 @@ module.exports = fp(async (fastify, options) => {
     }
 
     if (filter['keyword']) {
+      const keyword = filter['keyword'].toLowerCase();
       whereQuery[Op.or] = ['code', 'name', 'description'].map(name => {
-        return {
-          [name]: {
-            [Op.like]: `%${filter['keyword']}%`
-          }
-        };
+        return sequelizeWhere(fn('LOWER', col(name)), {
+          [Op.like]: `%${keyword}%`
+        });
       });
     }
     if (Array.isArray(filter['codes']) && filter['codes'].length > 0) {
