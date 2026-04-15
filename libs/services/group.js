@@ -140,6 +140,39 @@ module.exports = fp(async (fastify, options) => {
     return tagsData.map(item => item.id);
   };
 
+  // 获取某个节点及其所有后代节点的 code 列表
+  const getDescendantCodes = async ({ code, type, language }) => {
+    if (!type) {
+      throw new Error('必须传入类型');
+    }
+    const whereQuery = { type };
+    if (language) {
+      whereQuery.language = language;
+    }
+    const tags = await models.tag.findAll({ where: whereQuery });
+    const tagsData = tags.map(tag => tag.get({ plain: true }));
+
+    const findDescendants = (parentId) => {
+      const children = tagsData.filter(item => item.parentId === parentId);
+      let codes = [];
+      children.forEach(child => {
+        codes.push(child.code);
+        codes = codes.concat(findDescendants(child.id));
+      });
+      return codes;
+    };
+
+    if (code) {
+      const tag = tagsData.find(item => item.code === code);
+      if (!tag) {
+        return [code];
+      }
+      return [code, ...findDescendants(tag.id)];
+    }
+    // 如果没有传入 code，返回所有节点的 code
+    return tagsData.map(item => item.code);
+  };
+
   const detail = async ({ id, code, type, language, parentId }) => {
     let tag;
     if (id) {
@@ -166,6 +199,6 @@ module.exports = fp(async (fastify, options) => {
   };
 
   Object.assign(fastify[options.name].services, {
-    save, remove, groupList, list, getDescendantIds
+    save, remove, groupList, list, getDescendantIds, getDescendantCodes
   });
 });
