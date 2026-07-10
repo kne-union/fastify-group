@@ -46,7 +46,7 @@ module.exports = ({ DataTypes, definePrimaryType, options }) => {
       indexes: [
         {
           unique: true,
-          fields: ['tenantId', 'type', 'code', 'language'],
+          fields: ['tenant_id', 'type', 'code', 'language'],
           where: {
             deleted_at: null
           }

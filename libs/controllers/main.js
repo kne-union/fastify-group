@@ -8,145 +8,97 @@ module.exports = fp(async (fastify, options) => {
     if (!options.tenant) {
       return data;
     }
-    const tenantId = request[tenantContextName]?.tenantId;
+    const tenantId = request[tenantContextName]?.tenantId || request.body.tenantId;
     if (tenantId == null) {
       throw new Error('开启租户支持时需要 tenantUser 鉴权，请求上缺少 tenantId');
     }
     return Object.assign({}, data, { tenantId });
   };
 
-  fastify.get(
-    `${options.prefix}/list`,
-    {
-      onRequest: options.getAuthenticate('read'),
-      schema: {
-        summary: '获取列表',
-        query: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', description: '标签类型' },
-            filter: {
-              type: 'object',
-              default: {}
-            },
-            perPage: {
-              type: 'number',
-              default: 20
-            },
-            currentPage: {
-              type: 'number',
-              default: 1
-            }
+  fastify.get(`${options.prefix}/list`, {
+    onRequest: options.getAuthenticate('read'), schema: {
+      summary: '获取列表', query: {
+        type: 'object', properties: {
+          type: { type: 'string', description: '标签类型' }, filter: {
+            type: 'object', default: {}
+          }, perPage: {
+            type: 'number', default: 20
+          }, currentPage: {
+            type: 'number', default: 1
           }
         }
       }
-    },
-    async request => {
-      return services.list(withTenantPayload(request.query, request));
     }
-  );
+  }, async request => {
+    return services.list(withTenantPayload(request.query, request));
+  });
 
-  fastify.get(
-    `${options.prefix}/group-list`,
-    {
-      onRequest: options.getAuthenticate('read'),
-      schema: {
-        summary: '获取type的所有数据（树形或列表）',
-        query: {
-          type: 'object',
-          properties: {
-            type: { type: 'string', description: '标签类型' },
-            output: { type: 'string', description: '是否输出为树型结构', enum: ['tree', 'list'] }
+  fastify.get(`${options.prefix}/group-list`, {
+    onRequest: options.getAuthenticate('read'), schema: {
+      summary: '获取type的所有数据（树形或列表）', query: {
+        type: 'object', properties: {
+          type: { type: 'string', description: '标签类型' },
+          output: { type: 'string', description: '是否输出为树型结构', enum: ['tree', 'list'] }
+        }
+      }
+    }
+  }, async request => {
+    return services.groupList(withTenantPayload(request.query, request));
+  });
+
+  fastify.get(`${options.prefix}/detail`, {
+    onRequest: options.getAuthenticate('read'), schema: {
+      summary: '获取单条数据', query: {
+        type: 'object', properties: {
+          id: {
+            type: 'string'
+          }, code: {
+            type: 'string'
+          }, type: {
+            type: 'string'
+          }, language: {
+            type: 'string'
           }
         }
       }
-    },
-    async request => {
-      return services.groupList(withTenantPayload(request.query, request));
     }
-  );
+  }, async request => {
+    return services.detail(withTenantPayload(request.query, request));
+  });
 
-  fastify.get(
-    `${options.prefix}/detail`,
-    {
-      onRequest: options.getAuthenticate('read'),
-      schema: {
-        summary: '获取单条数据',
-        query: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string'
-            },
-            code: {
-              type: 'string'
-            },
-            type: {
-              type: 'string'
-            },
-            language: {
-              type: 'string'
-            }
+  fastify.post(`${options.prefix}/save`, {
+    onRequest: options.getAuthenticate('write'), schema: {
+      summary: '保存一条数据', body: {
+        type: 'object', properties: {
+          id: { type: 'string' },
+          code: { type: 'string' },
+          type: { type: 'string' },
+          name: { type: 'string' },
+          description: { type: 'string' },
+          index: { type: 'number' },
+          parentId: { type: 'string' },
+          language: {
+            type: 'string'
+          }
+        }, required: ['type', 'code', 'name']
+      }
+    }
+  }, async request => {
+    return services.save(withTenantPayload(request.body, request));
+  });
+
+  fastify.post(`${options.prefix}/remove`, {
+    onRequest: options.getAuthenticate('delete'), schema: {
+      summary: '删除一条数据', body: {
+        type: 'object', properties: {
+          id: { type: 'string' }, code: { type: 'string' }, type: { type: 'string' }, language: {
+            type: 'string'
           }
         }
       }
-    },
-    async request => {
-      return services.detail(withTenantPayload(request.query, request));
     }
-  );
-
-  fastify.post(
-    `${options.prefix}/save`,
-    {
-      onRequest: options.getAuthenticate('write'),
-      schema: {
-        summary: '保存一条数据',
-        body: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            code: { type: 'string' },
-            type: { type: 'string' },
-            name: { type: 'string' },
-            description: { type: 'string' },
-            index: { type: 'number' },
-            parentId: { type: 'string' },
-            language: {
-              type: 'string'
-            }
-          },
-          required: ['type', 'code', 'name']
-        }
-      }
-    },
-    async request => {
-      return services.save(withTenantPayload(request.body, request));
-    }
-  );
-
-  fastify.post(
-    `${options.prefix}/remove`,
-    {
-      onRequest: options.getAuthenticate('delete'),
-      schema: {
-        summary: '删除一条数据',
-        body: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            code: { type: 'string' },
-            type: { type: 'string' },
-            language: {
-              type: 'string'
-            }
-          }
-        }
-      }
-    },
-    async request => {
-      await services.remove(withTenantPayload(request.body, request));
-      return {};
-    }
-  );
+  }, async request => {
+    await services.remove(withTenantPayload(request.body, request));
+    return {};
+  });
 });
