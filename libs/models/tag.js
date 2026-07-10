@@ -1,6 +1,12 @@
 module.exports = ({ DataTypes, definePrimaryType, options }) => {
   return {
     model: {
+      tenantId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: null,
+        comment: '租户 ID'
+      },
       type: {
         type: DataTypes.STRING,
         comment: '类型'
@@ -40,7 +46,7 @@ module.exports = ({ DataTypes, definePrimaryType, options }) => {
       indexes: [
         {
           unique: true,
-          fields: ['type', 'code', 'language'],
+          fields: ['tenantId', 'type', 'code', 'language'],
           where: {
             deleted_at: null
           }

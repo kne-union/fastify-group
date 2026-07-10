@@ -7,12 +7,17 @@ module.exports = fp(async (fastify, options) => {
     {
       dbTableNamePrefix: 't_',
       name: 'group',
+      tenant: null, // 传入 fastify.tenant 即开启租户隔离
       getAuthenticate: () => {
         return [];
       }
     },
     options
   );
+
+  if (options.tenant && !options.tenant.authenticate?.tenantUser) {
+    throw new Error('options.tenant 需为 @kne/fastify-tenant 命名空间（需包含 authenticate.tenantUser）');
+  }
 
   fastify.register(require('@kne/fastify-namespace'), {
     options,

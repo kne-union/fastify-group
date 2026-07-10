@@ -4,33 +4,40 @@ module.exports = fp(async (fastify, options) => {
   const { models, services } = fastify[options.name];
   const { Op } = fastify.sequelize.Sequelize;
 
-  const save = async ({ id, ...data }) => {
+  const withTenant = (where, { tenantId }) => (tenantId != null ? Object.assign({}, where, { tenantId }) : where);
+
+  const save = async ({ id, tenantId, ...data }) => {
     const tag = await detail({
-      id, code: data.code, type: data.type, language: data.language, parentId: data.parentId
+      id,
+      code: data.code,
+      type: data.type,
+      language: data.language,
+      parentId: data.parentId,
+      tenantId
     });
     if (tag) {
       await tag.update(data);
       return tag;
     }
-    if (data.parentId && !(await detail({ id: data.parentId }))) {
+    if (data.parentId && !(await detail({ id: data.parentId, tenantId }))) {
       throw new Error('未找到父标签');
     }
-    return models.tag.create(data);
+    return models.tag.create(Object.assign({}, data, tenantId != null ? { tenantId } : {}));
   };
 
-  const remove = async ({ id, type, code, language }) => {
-    const tag = await detail({ id, type, code, language });
+  const remove = async ({ id, type, code, language, tenantId }) => {
+    const tag = await detail({ id, type, code, language, tenantId });
     if (!tag) {
       throw new Error('标签不存在');
     }
     await tag.destroy();
   };
 
-  const groupList = async ({ type, language, output = 'tree' }) => {
+  const groupList = async ({ type, language, output = 'tree', tenantId }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
-    const whereQuery = {};
+    const whereQuery = withTenant({}, { tenantId });
 
     if (language) {
       whereQuery.language = language;
@@ -60,11 +67,11 @@ module.exports = fp(async (fastify, options) => {
 
   const { fn, col, where: sequelizeWhere } = fastify.sequelize.Sequelize;
 
-  const list = async ({ type, parentId, filter = {}, perPage, currentPage }) => {
+  const list = async ({ type, parentId, filter = {}, perPage, currentPage, tenantId }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
-    const whereQuery = {};
+    const whereQuery = withTenant({}, { tenantId });
     ['code', 'name'].forEach(name => {
       if (filter[name]) {
         whereQuery[name] = sequelizeWhere(fn('LOWER', col(name)), {
@@ -103,27 +110,31 @@ module.exports = fp(async (fastify, options) => {
     const { count, rows } = await models.tag.findAndCountAll({
       where: Object.assign({}, whereQuery, {
         type
-      }), offset: perPage * (currentPage - 1), limit: perPage, order: [['createdAt', 'DESC']]
+      }),
+      offset: perPage * (currentPage - 1),
+      limit: perPage,
+      order: [['createdAt', 'DESC']]
     });
 
     return {
-      pageData: rows, totalCount: count
+      pageData: rows,
+      totalCount: count
     };
   };
 
   // 获取某个节点及其所有后代节点的 id 列表
-  const getDescendantIds = async ({ id, type, language }) => {
+  const getDescendantIds = async ({ id, type, language, tenantId }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
-    const whereQuery = { type };
+    const whereQuery = withTenant({ type }, { tenantId });
     if (language) {
       whereQuery.language = language;
     }
     const tags = await models.tag.findAll({ where: whereQuery });
     const tagsData = tags.map(tag => tag.get({ plain: true }));
 
-    const findDescendants = (parentId) => {
+    const findDescendants = parentId => {
       const children = tagsData.filter(item => item.parentId === parentId);
       let ids = [];
       children.forEach(child => {
@@ -141,18 +152,18 @@ module.exports = fp(async (fastify, options) => {
   };
 
   // 获取某个节点及其所有后代节点的 code 列表
-  const getDescendantCodes = async ({ code, type, language }) => {
+  const getDescendantCodes = async ({ code, type, language, tenantId }) => {
     if (!type) {
       throw new Error('必须传入类型');
     }
-    const whereQuery = { type };
+    const whereQuery = withTenant({ type }, { tenantId });
     if (language) {
       whereQuery.language = language;
     }
     const tags = await models.tag.findAll({ where: whereQuery });
     const tagsData = tags.map(tag => tag.get({ plain: true }));
 
-    const findDescendants = (parentId) => {
+    const findDescendants = parentId => {
       const children = tagsData.filter(item => item.parentId === parentId);
       let codes = [];
       children.forEach(child => {
@@ -173,22 +184,36 @@ module.exports = fp(async (fastify, options) => {
     return tagsData.map(item => item.code);
   };
 
-  const detail = async ({ id, code, type, language, parentId }) => {
+  const detail = async ({ id, code, type, language, parentId, tenantId }) => {
     let tag;
     if (id) {
       tag = await models.tag.findByPk(id);
+      if (tag && tenantId != null && tag.tenantId !== tenantId) {
+        return null;
+      }
     }
-    if (code && type && language) {
+    if (!tag && code && type && language) {
       tag = await models.tag.findOne({
-        where: Object.assign({}, {
-          code, type, language
-        }, parentId ? {
-          parentId
-        } : {
-          parentId: {
-            [Op.is]: null
-          }
-        })
+        where: withTenant(
+          Object.assign(
+            {},
+            {
+              code,
+              type,
+              language
+            },
+            parentId
+              ? {
+                  parentId
+                }
+              : {
+                  parentId: {
+                    [Op.is]: null
+                  }
+                }
+          ),
+          { tenantId }
+        )
       });
     }
     if (!tag) {
@@ -199,6 +224,12 @@ module.exports = fp(async (fastify, options) => {
   };
 
   Object.assign(fastify[options.name].services, {
-    save, remove, groupList, list, getDescendantIds, getDescendantCodes
+    save,
+    remove,
+    groupList,
+    list,
+    getDescendantIds,
+    getDescendantCodes,
+    detail
   });
 });
