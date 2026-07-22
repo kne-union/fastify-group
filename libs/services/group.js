@@ -69,14 +69,18 @@ module.exports = fp(async (fastify, options) => {
   const save = async ({ id, tenantId, ...data }) => {
     const language = data.language || 'zh-CN';
     data.language = language;
-    const tag = await detail({
-      id,
-      code: data.code,
-      type: data.type,
-      language,
-      parentId: data.parentId,
-      tenantId
-    });
+    // 有 id 时只按 id 查，避免按 code + parentId IS NULL 漏掉有父级的节点，误走创建触发唯一约束
+    const tag = await detail(
+      id
+        ? { id, tenantId }
+        : {
+            code: data.code,
+            type: data.type,
+            language,
+            parentId: data.parentId,
+            tenantId
+          }
+    );
     if (tag) {
       const { code: _ignoredCode, ...updateData } = data;
       await assertParentValid({
@@ -274,27 +278,13 @@ module.exports = fp(async (fastify, options) => {
       }
     }
     if (!tag && code && type && language) {
+      // code 在 type+language 下唯一，不要默认加 parentId IS NULL（否则有父级的节点永远查不到）
+      const whereQuery = { code, type, language };
+      if (parentId != null && parentId !== '') {
+        whereQuery.parentId = parentId;
+      }
       tag = await models.tag.findOne({
-        where: withTenant(
-          Object.assign(
-            {},
-            {
-              code,
-              type,
-              language
-            },
-            parentId
-              ? {
-                  parentId
-                }
-              : {
-                  parentId: {
-                    [Op.is]: null
-                  }
-                }
-          ),
-          { tenantId }
-        )
+        where: withTenant(whereQuery, { tenantId })
       });
     }
     if (!tag) {
