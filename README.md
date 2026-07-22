@@ -20,6 +20,7 @@ npm i --save @kne/fastify-group
 
 - **分组管理**：支持创建、查询、更新和删除分组数据。
 - **标签管理**：支持对标签进行增删改查操作，并支持树形结构展示。
+- **编码**：新建时可省略 `code`，后端自动生成短随机串；更新时不允许修改编码；同租户/类型/语言下编码不可重复。
 - **权限控制**：通过 `getAuthenticate` 方法实现接口的权限验证。
 - **可选租户**：注册时传入 `tenant: fastify.tenant` 即可按租户隔离数据。
 
@@ -77,7 +78,7 @@ await fastify.register(require('@kne/fastify-group'), {
 | `/group/list`             | GET  | 获取分组列表        | `type` (string): 标签类型                                                                                                                                                   |
 | `/group/group-list`       | GET  | 获取分组列表（树形或列表） | `type` (string): 标签类型, `output` (string): 输出格式（`tree` 或 `list`）                                                                                                         |
 | `/group/detail`           | GET  | 获取分组详情        | `id` (string): 分组ID, `code` (string): 分组编码, `type` (string): 标签类型                                                                                                       |
-| `/group/save`             | POST | 保存分组数据        | `id` (string): 分组ID, `code` (string): 分组编码, `type` (string): 标签类型, `name` (string): 分组名称, `description` (string): 描述, `index` (number): 排序字段, `parentId` (string): 父级ID |
+| `/group/save`             | POST | 保存分组数据        | `id` (string): 分组ID, `code` (string, 可选): 分组编码（新建未传时自动生成；更新时忽略）, `type` (string): 标签类型, `name` (string): 分组名称, `description` (string): 描述, `index` (number): 排序字段, `parentId` (string): 父级ID。必填：`type`、`name` |
 | `/group/remove`           | POST | 删除分组数据        | `id` (string): 分组ID, `code` (string): 分组编码, `type` (string): 标签类型                                                                                                       |
 | `/group/admin/list`       | GET  | 管理端获取分组列表     | 同 `/group/list`，可传 `tenantId`                                                                                                                                           |
 | `/group/admin/group-list` | GET  | 管理端获取分组树/列表   | 同 `/group/group-list`，可传 `tenantId`                                                                                                                                     |

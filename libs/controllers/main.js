@@ -122,7 +122,7 @@ module.exports = fp(async (fastify, options) => {
               },
               tenantId: { type: 'string', description: '租户 ID（admin 场景可显式传入）' }
             },
-            required: ['type', 'code', 'name']
+            required: ['type', 'name']
           }
         }
       },
