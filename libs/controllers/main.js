@@ -116,9 +116,14 @@ module.exports = fp(async (fastify, options) => {
               name: { type: 'string' },
               description: { type: 'string' },
               index: { type: 'number' },
-              parentId: { type: 'string' },
+              parentId: { type: ['string', 'null'] },
               language: {
                 type: 'string'
+              },
+              options: {
+                type: 'object',
+                additionalProperties: true,
+                description: '扩展字段，如 { color }'
               },
               tenantId: { type: 'string', description: '租户 ID（admin 场景可显式传入）' }
             },
