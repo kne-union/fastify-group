@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fp = require('fastify-plugin');
 
 module.exports = fp(async (fastify, options) => {
@@ -6,23 +7,103 @@ module.exports = fp(async (fastify, options) => {
 
   const withTenant = (where, { tenantId }) => (tenantId != null ? Object.assign({}, where, { tenantId }) : where);
 
+  const generateCode = () => crypto.randomBytes(8).toString('hex');
+
+  const findByCodeUnique = async ({ code, type, language, tenantId, excludeId }) => {
+    if (!code || !type) {
+      return null;
+    }
+    const whereQuery = withTenant(
+      Object.assign({}, { code, type }, language ? { language } : {}),
+      { tenantId }
+    );
+    if (excludeId) {
+      whereQuery.id = { [Op.ne]: excludeId };
+    }
+    return models.tag.findOne({ where: whereQuery });
+  };
+
+  const assertCodeUnique = async ({ code, type, language, tenantId, excludeId }) => {
+    const existing = await findByCodeUnique({ code, type, language, tenantId, excludeId });
+    if (existing) {
+      throw new Error('编码已存在');
+    }
+  };
+
+  const assertParentValid = async ({ id, parentId, type, language, tenantId }) => {
+    if (!parentId) {
+      return;
+    }
+    if (id && String(parentId) === String(id)) {
+      throw new Error('父级不能是自身');
+    }
+    const parent = await detail({ id: parentId, tenantId });
+    if (!parent) {
+      throw new Error('未找到父标签');
+    }
+    if (id) {
+      const descendantIds = await getDescendantIds({ id, type: type || parent.type, language, tenantId });
+      if (descendantIds.some(item => String(item) === String(parentId))) {
+        throw new Error('父级不能是自身的子孙节点');
+      }
+    }
+  };
+
+  const allocateCode = async ({ code, type, language, tenantId }) => {
+    const normalizedCode = code && String(code).trim() ? String(code).trim() : null;
+    if (normalizedCode) {
+      await assertCodeUnique({ code: normalizedCode, type, language, tenantId });
+      return normalizedCode;
+    }
+    const maxAttempts = 8;
+    for (let i = 0; i < maxAttempts; i++) {
+      const nextCode = generateCode();
+      const existing = await findByCodeUnique({ code: nextCode, type, language, tenantId });
+      if (!existing) {
+        return nextCode;
+      }
+    }
+    throw new Error('生成编码失败，请重试');
+  };
+
   const save = async ({ id, tenantId, ...data }) => {
+    const language = data.language || 'zh-CN';
+    data.language = language;
     const tag = await detail({
       id,
       code: data.code,
       type: data.type,
-      language: data.language,
+      language,
       parentId: data.parentId,
       tenantId
     });
     if (tag) {
-      await tag.update(data);
+      const { code: _ignoredCode, ...updateData } = data;
+      await assertParentValid({
+        id: tag.id,
+        parentId: updateData.parentId,
+        type: updateData.type || tag.type,
+        language: updateData.language || tag.language,
+        tenantId
+      });
+      await tag.update(updateData);
       return tag;
     }
-    if (data.parentId && !(await detail({ id: data.parentId, tenantId }))) {
-      throw new Error('未找到父标签');
-    }
-    return models.tag.create(Object.assign({}, data, tenantId != null ? { tenantId } : {}));
+    await assertParentValid({
+      parentId: data.parentId,
+      type: data.type,
+      language,
+      tenantId
+    });
+    const code = await allocateCode({
+      code: data.code,
+      type: data.type,
+      language,
+      tenantId
+    });
+    return models.tag.create(
+      Object.assign({}, data, { code, language }, tenantId != null ? { tenantId } : {})
+    );
   };
 
   const remove = async ({ id, type, code, language, tenantId }) => {
