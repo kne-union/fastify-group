@@ -66,9 +66,18 @@ module.exports = fp(async (fastify, options) => {
     throw new Error('生成编码失败，请重试');
   };
 
+  const normalizeParentId = parentId => {
+    if (parentId === '' || parentId === undefined || parentId === null) {
+      return null;
+    }
+    return parentId;
+  };
+
   const save = async ({ id, tenantId, ...data }) => {
     const language = data.language || 'zh-CN';
     data.language = language;
+    // 表单/AJV 常把根节点 parentId 收成 ""，bigint 列不能吃空串
+    data.parentId = normalizeParentId(data.parentId);
     // 有 id 时只按 id 查，避免按 code + parentId IS NULL 漏掉有父级的节点，误走创建触发唯一约束
     const tag = await detail(
       id
