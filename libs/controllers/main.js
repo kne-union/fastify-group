@@ -9,13 +9,22 @@ module.exports = fp(async (fastify, options) => {
     if (!options.tenant) {
       return data;
     }
-    const tenantId =
-      request[tenantContextName]?.tenantId ?? request.query?.tenantId ?? request.body?.tenantId;
+    const tenantId = request[tenantContextName]?.tenantId ?? request.query?.tenantId ?? request.body?.tenantId;
     if (tenantId == null) {
       throw new Error('开启租户支持时需要 tenantUser 鉴权，请求上缺少 tenantId');
     }
     return Object.assign({}, data, { tenantId });
   };
+
+  // 客户端只能设置这些字段，避免把 createdAt、deletedAt 等系统字段写进数据库
+  const SAVE_FIELDS = ['id', 'code', 'type', 'name', 'description', 'index', 'parentId', 'language', 'options', 'tenantId'];
+  const pickSaveFields = body =>
+    SAVE_FIELDS.reduce((data, key) => {
+      if (body && body[key] !== undefined) {
+        data[key] = body[key];
+      }
+      return data;
+    }, {});
 
   const registerRoutes = (routePrefix, getAuth, tags) => {
     const TENANT_HINT = '开启租户隔离时只操作当前租户（tenantUser 上下文中的租户，没有时取参数 tenantId）的数据';
@@ -136,7 +145,7 @@ module.exports = fp(async (fastify, options) => {
         schema: {
           tags,
           summary: '保存一条数据',
-          description: `传 id 时修改该标签（编码不可修改）；不传 id 时按 code + type + language 查找已有标签，找到则修改，否则新建（code 不传自动生成）。父级不能是自身或子孙节点。${TENANT_HINT}`,
+          description: `传 id 时修改该标签（编码不可修改）；不传 id 时按 code + type + language 查找已有标签，找到则修改，否则新建（code 不传自动生成）。父级不能是自身或子孙节点。只保存下列声明的字段，其它字段（如 createdAt、deletedAt）会被忽略。${TENANT_HINT}`,
           body: {
             type: 'object',
             properties: {
@@ -164,7 +173,7 @@ module.exports = fp(async (fastify, options) => {
         }
       },
       async request => {
-        return services.save(withTenantPayload(request.body, request));
+        return services.save(withTenantPayload(pickSaveFields(request.body), request));
       }
     );
 
